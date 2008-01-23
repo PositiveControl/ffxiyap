@@ -35,12 +35,14 @@ class Parser:
         self.PathToLogs = PathToLogs
         self.ttlfights = 0
         self.CurrentLine = 0
-        self.CurrentLog = os.path.join(self.PathToLogs,self.GetLatestFile())
         self.contLine = False
         self.contPlayer = ""
         self.lastHit = ""
         self.contType = ""
         self.Players = {}
+        
+    def GetCurrentLine(self):
+        self.CurrentLog = os.path.join(self.PathToLogs,self.GetLatestFile())
         f = open(self.CurrentLog,"rb")
         log = f.read()
         f.close()
@@ -48,8 +50,6 @@ class Parser:
         chatlogarr = log[100:].split('\x00')
         for x in chatlogarr:
             self.CurrentLine = self.CurrentLine + 1
-        
-        #self.MainLoop()
         
     def ParseLog(self):
         f = open(self.CurrentLog,"rb")
@@ -111,6 +111,7 @@ class Parser:
             self.contLine = False
             self.contPlayer = ""
         
+        """TODO: Add chat code"""
         """Player scores a critical hit"""
         if re.search("critical hit!",string):
             name = re.sub("\s.+","",re.sub("^.+\x1E\x01","",string))
@@ -138,6 +139,24 @@ class Parser:
             obj.SetValue("swings",1)
             obj.SetValue("ttldmg",int(re.sub("\s.+","",re.sub(".+for\s","",string))))
             self.Players[name] = obj
+            """Setting this value so we can check the next line
+            for an additional effect."""
+            self.contPlayer = name
+            
+        """TODO: Find Example in logs"""
+        """Player makes a ranged hit"""
+        if re.match("ranged attack hits",string) or re.match("ranged attack hits", string):
+            name = re.sub("\s.+","",re.sub("^.+\x1E\x01","",string))
+            if name not in self.Players:
+                newplayer = Player(name)
+                self.Players[name] = newplayer
+            obj = self.Players[name]
+            obj.SetValue("rnghits",1)
+            obj.SetValue("rngattks",1)
+            obj.SetValue("ttldmg",int(re.sub("\s.+","",re.sub(".+for\s","",string))))
+            self.Players[name] = obj
+            """Setting this value so we can check the next line
+            for an additional effect."""
             self.contPlayer = name
             
         """Player uses Weaponskill"""
@@ -211,44 +230,7 @@ class Parser:
         date_file_list.reverse()
         
         return date_file_list[0][1]
-
-    def Output(self):
-        if ConsoleMode:
-            os.system(['clear', 'cls'][True])
-            print "Player \t  Acc%   ttldmg   wshigh   racc%   ttlsdmg   mbhigh   add.e.dmg"
-            alldmg = 0
-            
-            for name in self.Players:
-                obj = self.Players[name]
-                alldmg = obj.GetValue("ttldmg") + alldmg
-                
-            for name in self.Players:
-                obj = self.Players[name]
-                try:
-                    accpnt = (obj.GetValue("misses") / obj.GetValue("swings")) * 100
-                except ZeroDivisionError:
-                    accpnt = 0
-                try:
-                    pntofttldmg = (obj.GetValue("ttldmg") / alldmg) * 100
-                except ZeroDivisionError:
-                    pntofttldmg = 0
-                try:
-                    critpnt = (obj.GetValue("crit_count") / obj.GetValue("hits")) * 100
-                except ZeroDivisionError:
-                    critpnt = 0
-                try:
-                    racc = (obj.GetValue("rngmisses") / obj.GetValue("rngattks")) * 100
-                except ZeroDivisionError:
-                    racc = 0
-                print "%s \t  %s   %s   %s   %s   %s   %s   %s" % (obj.GetValue("name"),
-                      accpnt,obj.GetValue("ttldmg"),obj.GetValue("ws_high"),racc,
-                      obj.GetValue("ttlspelldmg"),obj.GetValue("mb_high"),
-                      obj.GetValue("addeffectdmg")
-                      )
-                
-            print "Total Fights: %s \n" % self.ttlfights     
-            print "Current Log: %s" % self.CurrentLog
-            
+           
     def MainLoop(self):
         while 1:
             self.ParseLog()
