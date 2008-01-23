@@ -4,8 +4,11 @@
 
 import wx
 import ffxiparser as parser
-import sys
+import os,sys
+import cPickle
+import datetime
 from wx.lib.wordwrap import wordwrap
+from operator import itemgetter
 
 # begin wxGlade: extracode
 # end wxGlade
@@ -44,17 +47,21 @@ class MyFrame(wx.Frame):
         self.Bind(wx.EVT_MENU,self.OnQuit,self.quit)
         self.Bind(wx.EVT_MENU,self.OnAbout,self.aboutmenu)
         self.Bind(wx.EVT_MENU, self.OnOptions, self.options)
+        self.Bind(wx.EVT_MENU, self.OnExport, self.exportparse)
         self.__set_properties()
         self.__do_layout()
         # end wxGlade
+        """Probably deprecated now"""
         self.columns = ['Player','Acc %','TTL Dmg','% of TTL Dmg',
                        'WS High','TTL WS Dmg','Crits','Crit %',
                        'Evades','Evade %',
                        'TTL Rng Dmg','Rng Acc %','TTL Spell Dmg',
                        'MB High','Addtl.Effect Dmg'
                        ]
-        y = 0
-        for x in self.columns:
+        self.configlist = configlist
+        y = 1
+        self.list_ctrl_1.InsertColumn(0,"Player",width=85)
+        for x in self.configlist:
             self.list_ctrl_1.InsertColumn(y,x,width=85)
             y = y + 1
         
@@ -136,17 +143,47 @@ OTHER DEALINGS IN THE SOFTWARE."""
         wx.AboutBox(info)
         
     def OnQuit(self,evt):
+        f = open('config.dat','w')
+        cPickle.dump(self.configlist,f)
+        cPickle.dump(self.PathToLogs,f)
+        f.close()
         self.Close()    
     def OnOptions(self,evt):
         optionsframe = OptionsFrame(None, -1, "", self)   
+    def OnExport(self,evt):
+        dlg = wx.FileDialog(
+              self, message="Save file as ...", defaultDir=os.getcwd(), 
+              defaultFile="", wildcard="*.html", style=wx.SAVE
+              )
+        if dlg.ShowModal() == wx.ID_OK:
+            path = dlg.GetPath()
+            self.ExportFile(path,self.p.GetValues())
+        dlg.Destroy()
+    def ExportFile(self,path,Players):
+        alldmg = 0
+        timestamp = datetime.datetime.now().strftime("%A, %m/%d/%Y %H:%M:%S")
+        html = "<html><head><title>YAP Parse Results - %s</title><head><body>" % timestamp
+        html += "<table border=1><tr><td>Name</td>"
+        for k,v in sorted(self.currentcolumns.iteritems(),key=itemgetter(1),reverse=False):
+            html += "<td>%s</td>" % k
+        for name in Players:
+            obj = Players[name]
+            alldmg = obj.GetValue("ttldmg") + alldmg
+        for name in Players:
+            stats = self.CalculateValues(Players, name, alldmg)
+            html += "</tr><tr><td>%s</td>" % name           
+            for k,v in sorted(self.currentcolumns.iteritems(),key=itemgetter(1),reverse=False):
+                html += "<td>%s</td>" % str(stats[k])
+        html += "</tr></table>"
+        html += "</body></html>"
+        filename = (datetime.datetime.now().strftime("%m-%d-%Y-%H%M%S")) + ".html"
+        f = open(path,"w")
+        f.write(html)
+        f.close() 
     def Update(self,Players,CurrentLog):
         alldmg = 0
-        self.list_ctrl_1.ClearAll()
+        self.RedrawList()
         self.frame_1_statusbar.SetStatusText(CurrentLog)
-        y = 0
-        for x in self.columns:
-            self.list_ctrl_1.InsertColumn(y,x,width=85)
-            y = y + 1
         for name in Players:
             obj = Players[name]
             alldmg = obj.GetValue("ttldmg") + alldmg
@@ -156,10 +193,22 @@ OTHER DEALINGS IN THE SOFTWARE."""
             obj = Players[name]
             index = self.list_ctrl_1.InsertStringItem(sys.maxint,obj.GetValue("name"))
             y = 1
-            for x in stats:
-                self.list_ctrl_1.SetStringItem(index,y,str(x))
+            self.list_ctrl_1.SetStringItem(index,0,obj.GetValue("name"))
+            for key in stats:
+                if key in self.currentcolumns:
+                    value = stats[key]
+                    self.list_ctrl_1.SetStringItem(index,self.currentcolumns[key],str(value))
                 y = y + 1
-                
+    def RedrawList(self):
+        self.currentcolumns = {}
+        self.list_ctrl_1.ClearAll()
+        self.list_ctrl_1.InsertColumn(0,"Player",width=85)
+        y = 1
+        for x in self.configlist:
+            self.list_ctrl_1.InsertColumn(y,x,width=85)
+            self.currentcolumns[x] = y
+            print self.currentcolumns
+            y = y + 1           
     def CalculateValues(self,Players,name,alldmg):
         obj = Players[name]
         try:
@@ -185,16 +234,20 @@ OTHER DEALINGS IN THE SOFTWARE."""
         except ZeroDivisionError:
             evapcnt = 0
         
-        stats = [accpnt,obj.GetValue("ttldmg"),pntofttldmg,obj.GetValue("ws_high"),
-                 obj.GetValue("wsdmg"),obj.GetValue("crit_count"),critpnt,obj.GetValue("evades"),
-                 evapcnt,obj.GetValue("rngdmg"),racc,obj.GetValue("ttlspelldmg"),
-                 obj.GetValue("mb_high"),obj.GetValue("addeffectdmg")
-                 ]
+        stats = {'Acc %':accpnt,'TTL Dmg':obj.GetValue("ttldmg"),'% of TTL Dmg':pntofttldmg,
+                 'WS High':obj.GetValue("ws_high"),'TTL WS Dmg':obj.GetValue("wsdmg"),
+                 'Crits':obj.GetValue("crit_count"),'Crit %':critpnt,'Evades':obj.GetValue("evades"),
+                 'Evade %':evapcnt,'TTL Rng Dmg':obj.GetValue("rngdmg"),'Rng Acc %':racc,
+                 'TTL Spell Dmg':obj.GetValue("ttlspelldmg"),'MB High':obj.GetValue("mb_high"),
+                 'Addtl.Effect Dmg':obj.GetValue("addeffectdmg")
+                 }
         
         print stats
         return stats
     def SetPathToLogs(self,NewLogPath):
-        self.PathToLogs = NewLogPath           
+        self.PathToLogs = NewLogPath        
+    def SetConfigList(self,NewConfigList):
+        self.configlist = NewConfigList   
 # end of class MyFrame
 
 class OptionsFrame(wx.Frame):
@@ -223,10 +276,17 @@ class OptionsFrame(wx.Frame):
         self.checkRngAccPcnt = wx.CheckBox(self.notebook_1_pane_2, -1, "Rng Acc %")
         self.checkTTLSpellDmg = wx.CheckBox(self.notebook_1_pane_2, -1, "TTL Spell Dmg")
         self.checkMB_High = wx.CheckBox(self.notebook_1_pane_2, -1, "MB High")
-        self.checkAddEffect = wx.CheckBox(self.notebook_1_pane_2, -1, "Addtl. Effect Dmg")
+        self.checkAddEffect = wx.CheckBox(self.notebook_1_pane_2, -1, "Addtl.Effect Dmg")
+        self.checkboxdict = { 'Acc %':self.checkAccpnt,'% of TTL Dmg':self.checkPnctTTLDmg,
+                             'TTL WS Dmg':self.checkTTLwsdmg,'TTL Dmg':self.checkTTLDmg,
+                             'WS High':self.checkws_high,'Crits':self.checkCrit_count,
+                             'Crit %':self.checkCritPnct,'Evades':self.checkEvades,
+                             'Evade %':self.checkEvadePnct,'TTL Rng Dmg':self.checkTTLRngDmg,
+                             'Rng Acc %':self.checkRngAccPcnt,'TTL Spell Dmg':self.checkTTLSpellDmg,
+                             'MB High':self.checkMB_High,'Addtl.Effect Dmg':self.checkAddEffect
+                             }
         self.button_2 = wx.Button(self.notebook_1_pane_2, -1, "OK")
         self.button_3 = wx.Button(self.notebook_1_pane_2, -1, "Cancel")
-
         self.__set_properties()
         self.__do_layout()
         # end wxGlade
@@ -237,7 +297,11 @@ class OptionsFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.OnBrowse, self.button_7)
         #self.txtLogFileLocation.SetValue(PathToLogs)
         self.caller = caller
+        self.txtLogFileLocation.SetValue(self.caller.PathToLogs)
+        self.LoadCheckBoxes()
+        self.SetIcon(icon1)
         self.Show(True)
+        
     def __set_properties(self):
         # begin wxGlade: MyFrame.__set_properties
         self.SetTitle("YAP: Options")
@@ -291,12 +355,26 @@ class OptionsFrame(wx.Frame):
         self.SetSizer(sizer_2)
         self.Layout()
         # end wxGlade
+    def LoadCheckBoxes(self):
+        for key in self.checkboxdict:
+            if key in self.caller.configlist:
+                checkbox = self.checkboxdict[key]
+                checkbox.SetValue(True)
+    def SaveCheckBoxes(self):
+        configlist = []
+        for key in self.checkboxdict:
+            checkbox = self.checkboxdict[key]
+            if checkbox.GetValue():
+                configlist.append(key)
+        self.caller.SetConfigList(configlist)      
     def OnQuit(self,evt):
         self.Close()       
-        
+                      
     """TODO: Save options and quit"""
     def OnOK(self,evt):
-        self.caller.SetPathToLogs(self.PathToLogs)
+        self.caller.SetPathToLogs(self.txtLogFileLocation.GetValue())
+        self.SaveCheckBoxes()
+        self.caller.RedrawList()
         self.Close()
         
     def OnBrowse(self,evt):
@@ -307,17 +385,31 @@ class OptionsFrame(wx.Frame):
                            #| wx.DD_CHANGE_DIR
                            )
         if dlg.ShowModal() == wx.ID_OK:
-            self.PathToLogs = dlg.GetPath()
-            self.txtLogFileLocation.SetValue(self.PathToLogs)
+            #self.PathToLogs = dlg.GetPath()
+            self.txtLogFileLocation.SetValue(dlg.GetPath())
         dlg.Destroy()
-    
-PathToLogs = "E:\\Program Files\\PlayOnline\\SquareEnix\\FINAL FANTASY XI\\TEMP"
+
+if os.path.exists('config.dat'):
+     f = open('config.dat','rb')
+     configlist = cPickle.load(f)
+     PathToLogs = cPickle.load(f)
+     f.close()
+else:
+    configlist = ['Acc %','TTL Dmg','% of TTL Dmg',
+                       'WS High','TTL WS Dmg','Crits','Crit %',
+                       'Evades','Evade %',
+                       'TTL Rng Dmg','Rng Acc %','TTL Spell Dmg',
+                       'MB High','Addtl.Effect Dmg'
+                  ]
+    PathToLogs = "C:\\Program Files\\PlayOnline\\SquareEnix\\FINAL FANTASY XI\\TEMP"
 ConsoleMode = False
 
 if __name__ == "__main__":
     app = wx.PySimpleApp(0)
     wx.InitAllImageHandlers()
     frame_1 = MyFrame(None, -1, "")
+    icon1 = wx.Icon("icon.ico",wx.BITMAP_TYPE_ICO)
     app.SetTopWindow(frame_1)
+    frame_1.SetIcon(icon1)
     frame_1.Show()
     app.MainLoop()

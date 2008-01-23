@@ -98,7 +98,7 @@ class Parser:
                 self.lastHit = ""
         
         """Line continues from last line because of WS or something"""
-        if self.contLine:
+        if self.contLine and self.contPlayer != "":
             obj = self.Players[self.contPlayer]
             dmg = int(re.sub("\s.+","",re.sub(".+takes\s","",string)))
             obj.SetValue("ttldmg",dmg)
@@ -111,9 +111,33 @@ class Parser:
             self.contLine = False
             self.contPlayer = ""
         
-        """TODO: Add chat code"""
+        if self.contLine and self.contPlayer == "":
+            if self.contType == "mobws":
+                match = re.search("\x1E\x01[A-Z][a-z]+\s",string)
+                name = re.sub("[\W]","",match.group())
+                if re.search("takes.+",string):
+                    dmg = int(re.sub("[^0-9]","",re.search("takes.+",string)))
+                    obj = self.Players[name]
+                    obj.SetValue("dmgtaken",dmg)
+                    obj.SetValue("mobswings",1)
+                    self.Players[name] = obj
+                else:
+                    obj = self.Players[name]
+                    obj.SetValue("mobswings",1)
+                    obj.SetValue("evades",1)
+                    self.Players[name] = obj
+            if self.contType == "mobcrit":
+                match = re.search("\x1E\x01[A-Z][a-z]+\s",string)
+                name = re.sub("[\W]","",match.group())
+                dmg = int(re.sub("[^0-9]","",re.search("takes.+",string)))
+                obj = self.Players[name]
+                obj.SetValue("mobswings",1)
+                obj.SetValue("dmgtaken",dmg)
+                self.Players[name] = obj
+                self.contLine = False
+                self.contType = ""
         """Player scores a critical hit"""
-        if re.search("critical hit!",string):
+        if re.match("\x31\x34.+critical hit!",string) or re.match("\x31\x39.+critical hit!",string):
             name = re.sub("\s.+","",re.sub("^.+\x1E\x01","",string))
             if name not in self.Players:
                 newplayer = Player(name)
@@ -144,8 +168,9 @@ class Parser:
             self.contPlayer = name
             
         """TODO: Find Example in logs"""
+        """Assuming \x31\x34 and \x31\x39"""
         """Player makes a ranged hit"""
-        if re.match("ranged attack hits",string) or re.match("ranged attack hits", string):
+        if re.match("\x31\x34.+ranged attack hits",string) or re.match("\x31\x39.+ranged attack hits", string):
             name = re.sub("\s.+","",re.sub("^.+\x1E\x01","",string))
             if name not in self.Players:
                 newplayer = Player(name)
@@ -217,6 +242,16 @@ class Parser:
             obj.SetValue("mobswings",1)
             self.Players[name] = obj
             self.lastHit = name
+        
+        """Mob hits Player with WS"""
+        if re.match("\x36\x66.+uses",string):
+            self.contLine = True
+            self.contType = "mobws"
+        
+        """Mob hits player with crit"""
+        if re.match("\x31\x63.+critical hit!",string) or re.match("\x32\x30.+critical hit!",string):
+            self.contLine = True
+            self.contType = "mobcrit"
             
     def GetLatestFile(self):
         filelist = os.listdir(self.PathToLogs)
