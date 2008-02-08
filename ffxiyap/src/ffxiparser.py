@@ -39,40 +39,43 @@ class Parser:
         self.contPlayer = ""
         self.lastHit = ""
         self.contType = ""
+        self.CurrentLog = os.path.join(self.PathToLogs,self.GetLatestFile())
         self.Players = {}
         
-    def GetCurrentLine(self):
-        self.CurrentLog = os.path.join(self.PathToLogs,self.GetLatestFile())
-        f = open(self.CurrentLog,"rb")
-        log = f.read()
-        f.close()
+    #def GetCurrentLine(self):
+     #   self.CurrentLog = os.path.join(self.PathToLogs,self.GetLatestFile())
+      #  f = open(self.CurrentLog,"rb")
+       # log = f.read()
+        #f.close()
         
-        chatlogarr = log[100:].split('\x00')
-        for x in chatlogarr:
-            self.CurrentLine = self.CurrentLine + 1
+        #chatlogarr = log[100:].split('\x00')
+        #for x in chatlogarr:
+        #    self.CurrentLine = self.CurrentLine + 1
         
     def ParseLog(self):
-        f = open(self.CurrentLog,"rb")
-        log = f.read()
-        f.close()
+        if (self.CurrentLog != os.path.join(self.PathToLogs,self.GetLatestFile())):
+            self.CurrentLog = os.path.join(self.PathToLogs,self.GetLatestFile())
+            f = open(self.CurrentLog,"rb")
+            log = f.read()
+            f.close()
         
-        chatlogarr = log[100:].split('\x00')
-        newarr = chatlogarr[self.CurrentLine:]
+            chatlogarr = log[100:].split('\x00')
+            #newarr = chatlogarr[self.CurrentLine:]
         
-        for x in newarr:
-            self.ParseLine(x)
-            self.CurrentLine = self.CurrentLine + 1
+            for x in chatlogarr:
+                self.ParseLine(x)
+                #self.CurrentLine = self.CurrentLine + 1
         
-        if self.CurrentLine > 50: 
-            match = re.search("[0-9]+.log",self.CurrentLog)
-            if int(match.group().split(".")[0]) == 19:
-                nextLog = os.path.join(self.PathToLogs,"0.log")
-            else:
-                nextLog = os.path.join(self.PathToLogs,str(int(match.group().split(".")[0]) + 1) \
-                                  + "." + self.CurrentLog.split(".")[1])
-            if os.stat(nextLog)[8] > os.stat(self.CurrentLog)[8]:
-                self.CurrentLog = nextLog
-                self.CurrentLine = 0
+            #if self.CurrentLine > 50: 
+             #   match = re.search("[0-9]+.log",self.CurrentLog)
+              #  if int(match.group().split(".")[0]) == 19:
+               #     nextLog = os.path.join(self.PathToLogs,"0.log")
+                #else:
+                 #   nextLog = os.path.join(self.PathToLogs,str(int(match.group().split(".")[0]) + 1) \
+                  #                + "." + self.CurrentLog.split(".")[1])
+                #if os.stat(nextLog)[8] > os.stat(self.CurrentLog)[8]:
+                 #   self.CurrentLog = nextLog
+                  #  self.CurrentLine = 0
                 
     def ParseLine(self,string):
         """Player causes an additional effect"""

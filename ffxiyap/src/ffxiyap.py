@@ -107,7 +107,7 @@ class MyFrame(wx.Frame):
         self.button_1.Disable()
         self.button_2.Enable()
         self.p = parser.Parser(self.PathToLogs)
-        self.p.GetCurrentLine()
+        #self.p.GetCurrentLine()
         self.OnTimer()
     
     def OnAbout(self,evt):
